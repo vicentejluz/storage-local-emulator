@@ -1,7 +1,8 @@
-package com.vicente.storage.dao.impl;
+package com.vicente.storage.repository.impl;
 
-import com.vicente.storage.dao.StoredFileMetadataDAO;
-import com.vicente.storage.domain.entity.StoredFileMetadata;
+import com.vicente.storage.exception.MetadataPersistenceException;
+import com.vicente.storage.repository.StoredFileMetadataRepository;
+import com.vicente.storage.domain.StoredFileMetadata;
 import com.vicente.storage.mapper.StoredFileMetadataRowMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,39 +15,52 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public class StoredFileMetadataDAOImpl implements StoredFileMetadataDAO {
+public class StoredFileMetadataRepositoryImpl implements StoredFileMetadataRepository {
     private final JdbcTemplate jdbcTemplate;
     private static final String TABLE_NAME = "tb_stored_file_metadata";
     private final RowMapper<StoredFileMetadata> rowMapper = new StoredFileMetadataRowMapper();
-    private static final Logger logger = LoggerFactory.getLogger(StoredFileMetadataDAOImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(StoredFileMetadataRepositoryImpl.class);
 
-    public StoredFileMetadataDAOImpl(JdbcTemplate jdbcTemplate) {
+    public StoredFileMetadataRepositoryImpl(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
-    @Transactional
     public void save(StoredFileMetadata data) {
         int rows = jdbcTemplate.update(
-                "INSERT OR REPLACE INTO " + TABLE_NAME + " (" +
-                        "object_key, file_name, physical_file_name, extension, content_type, size, path, bucket, checksum) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                data.objectKey(),
-                data.fileName(),
-                data.physicalFileName(),
-                data.extension(),
-                data.contentType(),
-                data.size(),
-                data.path(),
-                data.bucket(),
-                data.checksum()
+                "INSERT INTO " + TABLE_NAME + " (" +
+                        "object_key, virtual_file_name, physical_file_name, extension, content_type, content_disposition," +
+                        " content_length, virtual_path, bucket_id, etag) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                        "ON CONFLICT(bucket_id, object_key) " +
+                        "DO UPDATE SET " +
+                        "virtual_file_name = excluded.virtual_file_name, " +
+                        "physical_file_name = excluded.physical_file_name, " +
+                        "extension = excluded.extension, " +
+                        "etag = excluded.etag, " +
+                        "content_type = excluded.content_type," +
+                        "content_length = excluded.content_length, " +
+                        "virtual_path = excluded.virtual_path, " +
+                        "content_disposition = excluded.content_disposition, " +
+                        "updated_at = CURRENT_TIMESTAMP",
+                data.getObjectKey(),
+                data.getVirtualFileName(),
+                data.getPhysicalFileName(),
+                data.getExtension(),
+                data.getContentType(),
+                data.getContentDisposition(),
+                data.getContentLength(),
+                data.getVirtualPath(),
+                data.getBucketId(),
+                data.getEtag()
         );
 
         if (rows <= 0) {
-            logger.warn("Failed to insert stored file metadata. objectKey={}", data.objectKey());
-        } else {
-            logger.debug("Stored file metadata inserted. objectKey={}", data.objectKey());
+            logger.error("Failed to insert stored file metadata. objectKey={}", data.getObjectKey());
+            throw new MetadataPersistenceException("Failed to insert stored file metadata");
         }
+
+        logger.debug("Stored file metadata upserted. objectKey={}", data.getObjectKey());
     }
 
     @Override
@@ -97,16 +111,16 @@ public class StoredFileMetadataDAOImpl implements StoredFileMetadataDAO {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<StoredFileMetadata> findByBucketAndObjectKey(String bucket, String objectKey) {
+    public Optional<StoredFileMetadata> findByBucketIdAndObjectKey(long bucketId, String objectKey) {
         logger.debug("Fetching stored file metadata. objectKey={}", objectKey);
         try {
             StoredFileMetadata storedFileMetadata = jdbcTemplate.queryForObject(
-                    "SELECT * FROM " + TABLE_NAME + " WHERE bucket=? AND object_key=? LIMIT 1",
-                    rowMapper, bucket, objectKey);
+                    "SELECT * FROM " + TABLE_NAME + " WHERE bucket_id=? AND object_key=? LIMIT 1",
+                    rowMapper, bucketId, objectKey);
 
             return Optional.ofNullable(storedFileMetadata);
         }catch (EmptyResultDataAccessException e) {
-            logger.debug("No stored file metadata found for bucket={}, objectKey={}", bucket, objectKey);
+            logger.debug("No stored file metadata found for bucketId={}, objectKey={}", bucketId, objectKey);
             return Optional.empty();
         }
     }
@@ -122,6 +136,21 @@ public class StoredFileMetadataDAOImpl implements StoredFileMetadataDAO {
         boolean exists = result != null && result > 0;
 
         logger.debug("Checking existence. bucket={}, objectKey={}, exists={}", bucket, objectKey, exists);
+        return exists;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Boolean existsPhysicalFileName(String physicalFileName) {
+        Integer result = jdbcTemplate.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM " + TABLE_NAME + " WHERE physical_file_name=?)",
+                Integer.class, physicalFileName
+        );
+
+        boolean exists = result != null && result > 0;
+
+        logger.debug("Checking existence. physicalFileName={}, exists={}", physicalFileName, exists);
+
         return exists;
     }
 

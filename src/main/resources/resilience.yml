@@ -1,0 +1,69 @@
+resilience4j.retry.instances:
+  saveMetadataRetry:
+    max-attempts: 3
+    wait-duration: 1s
+    enable-exponential-backoff: true
+    exponential-backoff-multiplier: 2.0
+    exponential-max-wait-duration: 10s
+    retry-exceptions:
+      - java.lang.RuntimeException
+    ignore-exceptions:
+      - java.lang.NullPointerException
+      - org.springframework.dao.DataIntegrityViolationException
+      - org.springframework.jdbc.BadSqlGrammarException
+  renameRetry:
+    max-attempts: 3
+    wait-duration: 500ms
+    enable-exponential-backoff: true
+    exponential-backoff-multiplier: 2.0
+    exponential-max-wait-duration: 4s
+    retry-exceptions:
+      - com.vicente.storage.exception.FileStorageException
+      - com.vicente.storage.exception.ChecksumMoveException
+      - java.io.IOException
+    ignore-exceptions:
+      - java.io.FileNotFoundException # Arquivo não existe
+      - java.nio.file.NoSuchFileException # Caminho inválido
+  removePreviousFileSafelyRetry:
+    max-attempts: 3
+    wait-duration: 500ms
+    enable-exponential-backoff: true
+    exponential-backoff-multiplier: 2.0
+    exponential-max-wait-duration: 4s
+    retry-exceptions:
+      - com.vicente.storage.exception.FileCleanupException
+      - com.vicente.storage.exception.MasterKeyStorageException
+  writeBytesRetry:
+    max-attempts: 3
+    wait-duration: 500ms
+    enable-exponential-backoff: true
+    exponential-backoff-multiplier: 2.0
+    exponential-max-wait-duration: 4s
+    retry-exceptions:
+      - com.vicente.storage.exception.MasterKeyStorageException
+    ignore-exceptions:
+      - java.nio.file.NoSuchFileException # Caminho inválido
+      - java.lang.NullPointerException
+  saveVersionMasterKeyRetry:
+    max-attempts: 3
+    wait-duration: 1s
+    enable-exponential-backoff: true
+    exponential-backoff-multiplier: 2.0
+    exponential-max-wait-duration: 10s
+    retry-exceptions:
+      - java.lang.RuntimeException
+    ignore-exceptions:
+      - java.lang.NullPointerException
+      - org.springframework.dao.DataIntegrityViolationException
+      - org.springframework.jdbc.BadSqlGrammarException
+  readAllBytesRetry:
+    max-attempts: 3
+    wait-duration: 500ms
+    enable-exponential-backoff: true
+    exponential-backoff-multiplier: 2.0
+    exponential-max-wait-duration: 4s
+    retry-exceptions:
+      - com.vicente.storage.exception.MasterKeyStorageException
+    ignore-exceptions:
+      - java.nio.file.NoSuchFileException # Caminho inválido
+      - java.lang.NullPointerException

@@ -13,7 +13,7 @@
 	<version>0.0.1</version>
 	<name>Storage Local Emulator</name>
 	<description>Local object storage emulator with signed URL support, SQLite metadata and Docker volume support.</description>
-	<url>https://github.com/vicenteluz/storage-local-emulator</url>
+	<url>https://github.com/vicentejluz/storage-local-emulator</url>
 	<licenses>
 		<license>
 			<name>MIT License</name>
@@ -30,13 +30,14 @@
 		</developer>
 	</developers>
 	<scm>
-		<connection>scm:git:ssh://git@github.com/vicenteluz/storage-local-emulator.git</connection>
-		<developerConnection>scm:git:ssh://git@github.com/vicenteluz/storage-local-emulator.git</developerConnection>
+		<connection>scm:git:ssh://git@github.com/vicentejluz/storage-local-emulator.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com/vicentejluz/storage-local-emulator.git</developerConnection>
 		<tag>HEAD</tag>
-		<url>https://github.com/vicenteluz/storage-local-emulator</url>
+		<url>https://github.com/vicentejluz/storage-local-emulator</url>
 	</scm>
 	<properties>
 		<java.version>25</java.version>
+		<spring-cloud.version>2025.1.1</spring-cloud.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -46,13 +47,38 @@
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aspectj</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
 		<dependency>
 			<groupId>org.xerial</groupId>
 			<artifactId>sqlite-jdbc</artifactId>
-			<version>3.51.3.0</version>
+			<version>3.53.0.0</version>
 			<scope>runtime</scope>
 		</dependency>
 
@@ -62,6 +88,18 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<build>
 		<plugins>

@@ -1,4 +1,4 @@
-package com.vicente.storage.exception.error;
+package com.vicente.storage.exception.model;
 
 import java.time.Instant;
 

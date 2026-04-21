@@ -1,6 +1,7 @@
-package com.vicente.storage.exception.error;
+package com.vicente.storage.exception.handler;
 
 import com.vicente.storage.exception.ApiException;
+import com.vicente.storage.exception.model.StandardError;
 import com.vicente.storage.exception.enums.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;

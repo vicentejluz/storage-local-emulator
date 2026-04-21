@@ -29,6 +29,13 @@ public class DataSourceConfig {
         dataSource.setDriverClassName(driverClassName);
         dataSource.setMaximumPoolSize(maximumPoolSize);
         dataSource.setMinimumIdle(minimumIdle);
+
+        // Garante cache de 64MB e processamento em RAM
+        dataSource.setConnectionInitSql(
+                "PRAGMA cache_size = -32000; " +
+                        "PRAGMA temp_store = MEMORY; " +
+                        "PRAGMA mmap_size = 134217728;");
+
         return dataSource;
     }
 

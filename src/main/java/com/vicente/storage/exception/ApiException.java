@@ -11,6 +11,11 @@ public abstract class ApiException extends RuntimeException {
         this.errorCode = errorCode;
     }
 
+    protected ApiException(String message, ErrorCode errorCode, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
+    }
+
     public HttpStatus getStatus() {
         return errorCode.status();
     }
@@ -22,4 +27,5 @@ public abstract class ApiException extends RuntimeException {
     public ErrorCode getErrorCode() {
         return errorCode;
     }
+
 }

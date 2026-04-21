@@ -1,11 +1,11 @@
-package com.vicente.storage.dao;
+package com.vicente.storage.repository;
 
-import com.vicente.storage.domain.entity.StoredFileMetadata;
+import com.vicente.storage.domain.StoredFileMetadata;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface StoredFileMetadataDAO {
+public interface StoredFileMetadataRepository {
     void save(StoredFileMetadata data);
 
     Boolean deleteByBucketAndObjectKey(String bucket, String objectKey);
@@ -14,9 +14,12 @@ public interface StoredFileMetadataDAO {
 
     Integer deleteAllByBucket(String bucket);
 
-    Optional<StoredFileMetadata> findByBucketAndObjectKey(String bucket, String objectKey);
+    Optional<StoredFileMetadata> findByBucketIdAndObjectKey(long bucketId, String objectKey);
+
 
     Boolean existsByBucketAndObjectKey(String bucket, String objectKey);
+
+    Boolean existsPhysicalFileName(String physicalFileName);
 
     Integer countByBucket(String bucket);
 
