@@ -19,11 +19,11 @@ public class LocalStorageEmulatorController {
         this.localStorageEmulatorService = localStorageEmulatorService;
     }
 
-    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> upload(
+    @PostMapping(value = "/upload/{bucket}/{*objectKey}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> upload(
             @RequestPart("file") MultipartFile file,
-            @RequestParam("bucket") String bucket,
-            @RequestParam("objectKey") String objectKey
+            @PathVariable String bucket,
+            @PathVariable String objectKey
     ) {
 
         UploadMetadataDTO metadata = new UploadMetadataDTO(

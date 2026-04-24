@@ -37,8 +37,4 @@ public class MasterKey extends AuditableEntity {
     public void deactivate() {
         this.status = MasterKeyStatus.INACTIVE;
     }
-
-    public void revoke() {
-        this.status = MasterKeyStatus.REVOKED;
-    }
 }

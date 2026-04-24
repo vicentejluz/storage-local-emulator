@@ -80,14 +80,16 @@ public class MasterKeyRepositoryImpl implements MasterKeyRepository {
     }
 
     @Override
-    public void updateStatusForInactive(MasterKey data) {
-        int rows = jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET status='INACTIVE', updated_at=CURRENT_TIMESTAMP " +
-                "WHERE status='ACTIVE' AND version = ?", data.getVersion());
+    public void transitionStatus(Long masterKeyVersion, MasterKeyStatus from, MasterKeyStatus to) {
+        int rows = jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET status=?, updated_at=CURRENT_TIMESTAMP " +
+                "WHERE status=? AND version =?", to.name(), from.name(), masterKeyVersion);
 
         if (rows > 0) {
-            logger.debug("MasterKey status updated to INACTIVE | affected_rows={}", rows);
+            logger.debug("MasterKey status updated successfully | version={} | newStatus={} | affected_rows={}",
+                    masterKeyVersion, to, rows);
         } else {
-            logger.debug("No ACTIVE MasterKey found for version={} to update",  data.getVersion());
+            logger.debug("No MasterKey status updated. No matching row found | version={} | currentStatus={}",
+                    masterKeyVersion, from);
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.vicente.storage.security.crypto;
+package com.vicente.storage.security.key;
 
 import org.springframework.stereotype.Component;
 
@@ -75,7 +75,7 @@ public class MasterKeyHolder {
     // ambas atualizadas juntas como uma única operação lógica.
     //
     // Sem synchronized poderia haver condição de corrida.
-    public synchronized void load(SecretKey key,  Long version) {
+    public synchronized void update(SecretKey key,  Long version) {
         // Atualiza a chave ativa em memória.
         //
         // Após essa escrita, graças ao volatile,

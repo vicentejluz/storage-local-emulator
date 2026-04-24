@@ -4,28 +4,21 @@ import com.vicente.storage.domain.AccessKey;
 import com.vicente.storage.dto.AccessKeyDTO;
 import com.vicente.storage.exception.ActiveMasterKeyNotFoundException;
 import com.vicente.storage.exception.InvalidRootSecretKeyException;
-import com.vicente.storage.exception.MasterKeyStorageException;
 import com.vicente.storage.exception.SecretKeyCryptoException;
 import com.vicente.storage.repository.AccessKeyRepository;
 import com.vicente.storage.repository.MasterKeyRepository;
 import com.vicente.storage.security.crypto.SecretKeyCryptoService;
+import com.vicente.storage.security.key.MasterKeyLoader;
 import com.vicente.storage.service.AccessKeyService;
 
-import com.vicente.storage.support.retry.MasterKeyRetry;
-import com.vicente.storage.util.FileSuffixes;
-import com.vicente.storage.util.PathValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
@@ -37,21 +30,16 @@ public class AccessKeyServiceImpl implements AccessKeyService {
     private final AccessKeyRepository accessKeyRepository;
     private final SecretKeyCryptoService secretKeyCryptoService;
     private final MasterKeyRepository masterKeyRepository;
-    private final MasterKeyRetry masterKeyRetry;
-    private final Path rootPath;
+    private final MasterKeyLoader masterKeyLoader;
     private final ConcurrentMap<Long, SecretKey> cacheOldMasterKey = new ConcurrentHashMap<>();
-    public static final String ALGORITHM = "AES";
-    private static final int KEY_LENGTH = 256;
     private static final Logger logger = LoggerFactory.getLogger(AccessKeyServiceImpl.class);
 
     public AccessKeyServiceImpl(AccessKeyRepository accessKeyRepository, SecretKeyCryptoService secretKeyCryptoService,
-                                MasterKeyRepository masterKeyRepository, MasterKeyRetry masterKeyRetry,
-                                @Value("${storage.emulator.root.path}") String rootPath) {
+                                MasterKeyRepository masterKeyRepository, MasterKeyLoader masterKeyLoader) {
         this.accessKeyRepository = accessKeyRepository;
         this.secretKeyCryptoService = secretKeyCryptoService;
         this.masterKeyRepository = masterKeyRepository;
-        this.masterKeyRetry = masterKeyRetry;
-        this.rootPath = Paths.get(rootPath).toAbsolutePath().normalize();
+        this.masterKeyLoader = masterKeyLoader;
     }
 
     @Override
@@ -104,7 +92,7 @@ public class AccessKeyServiceImpl implements AccessKeyService {
         int success = 0;
         int failed = 0;
         long start = System.currentTimeMillis();
-        List<AccessKeyDTO> accessKeyDTOs = accessKeyRepository.findAllDifferentFromMasterKeyId(masterKeyId);
+        List<AccessKeyDTO> accessKeyDTOs = accessKeyRepository.findAllByMasterKeyIdNot(masterKeyId);
         logger.info("Rotating {} AccessKey(s) to masterKeyId={}", accessKeyDTOs.size(), masterKeyId);
         try {
             for (AccessKeyDTO dto : accessKeyDTOs) {
@@ -112,8 +100,7 @@ public class AccessKeyServiceImpl implements AccessKeyService {
                         dto.accessKey(), dto.masterKeyVersion(), masterKeyId);
                 try {
                     SecretKey oldMasterKey = getMasterKey(dto.masterKeyVersion());
-                    byte[] decrypted = secretKeyCryptoService.decrypt(
-                            dto.secretKey(), oldMasterKey);
+                    byte[] decrypted = secretKeyCryptoService.decrypt(dto.secretKey(), oldMasterKey);
                     String encrypted = secretKeyCryptoService.encrypt(decrypted);
                     accessKeyRepository.updateAccessKey(dto.accessKey(), encrypted, masterKeyId);
                     success++;
@@ -130,28 +117,40 @@ public class AccessKeyServiceImpl implements AccessKeyService {
                 accessKeyDTOs.size(), success, failed, System.currentTimeMillis() - start);
     }
 
+    /*
+     * Obtém uma Master Key correspondente à versão informada.
+     * Funcionamento:
+     * - Primeiro consulta o cache em memória (`cacheOldMasterKey`), que armazena
+     *   versões de chaves já carregadas anteriormente.
+     * - Se a chave da versão solicitada já estiver no cache, ela é retornada
+     *   imediatamente, evitando novo acesso a disco e recriação do objeto SecretKey.
+     * - Se não existir no cache, o método `computeIfAbsent(...)` executa
+     *   automaticamente o carregamento chamando `loadMasterKey(version)`.
+     * Sobre `computeIfAbsent`:
+     * - `computeIfAbsent` é um método de `ConcurrentMap`.
+     * - Ele verifica se a chave (`version`) existe no mapa.
+     * - Se existir, retorna o valor atual.
+     * - Se não existir, executa a função fornecida (`this::loadMasterKey`),
+     *   salva o resultado no mapa e retorna esse valor.
+     * Vantagens:
+     * - Thread-safe: seguro para múltiplas threads acessando simultaneamente.
+     * - Evita race conditions ao carregar a mesma chave ao mesmo tempo.
+     * - Melhora performance reduzindo leituras repetidas do filesystem.
+     * - Centraliza o lazy loading das Master Keys antigas.
+     * Exemplo:
+     * - Primeira chamada com versão 3:
+     *      cache vazio -> loadMasterKey(3) -> salva no cache -> retorna chave.
+     * - Segunda chamada com versão 3:
+     *      já existe no cache -> retorna diretamente.
+     * Uso no projeto:
+     * - Importante durante rotação de chaves, quando Access Keys antigas
+     *   precisam ser descriptografadas usando versões anteriores da Master Key.
+     *
+     * @param version versão da Master Key desejada
+     * @return SecretKey correspondente à versão solicitada
+     * @throws MasterKeyStorageException se ocorrer erro ao carregar a chave
+     */
     private SecretKey getMasterKey(Long version) {
-        return cacheOldMasterKey.computeIfAbsent(version, this::loadMasterKey);
-    }
-
-
-    private SecretKey loadMasterKey(Long version){
-        Path keysPath = rootPath.resolve("keys").normalize();
-        Path masterKeyPath = keysPath.resolve("master-key-" + version + FileSuffixes.KEY_SUFFIX).normalize();
-        PathValidator.ensurePathsWithinRoot(rootPath, keysPath, masterKeyPath);
-        byte[] bytes = null;
-        try {
-            bytes = masterKeyRetry.readAllBytesRetry(masterKeyPath);
-
-            if(bytes.length != (KEY_LENGTH / 8)){
-                throw new MasterKeyStorageException("Invalid master key size: expected " + (KEY_LENGTH / 8) + " bytes");
-            }
-
-            return new SecretKeySpec(bytes, ALGORITHM);
-        } finally {
-            if (bytes != null) {
-                Arrays.fill(bytes, (byte) 0);
-            }
-        }
+        return cacheOldMasterKey.computeIfAbsent(version, _ -> masterKeyLoader.load(version));
     }
 }

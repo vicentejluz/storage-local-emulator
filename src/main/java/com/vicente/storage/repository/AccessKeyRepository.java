@@ -11,7 +11,7 @@ public interface AccessKeyRepository {
 
     boolean existsAccessKey(String accessKey);
 
-    List<AccessKeyDTO> findAllDifferentFromMasterKeyId(Long masterKeyId);
+    List<AccessKeyDTO> findAllByMasterKeyIdNot(Long masterKeyId);
 
     void updateAccessKey(String accessKey, String secretKey, Long masterKeyId);
 }

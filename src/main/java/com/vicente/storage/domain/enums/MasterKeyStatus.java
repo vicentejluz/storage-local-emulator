@@ -2,9 +2,8 @@ package com.vicente.storage.domain.enums;
 
 public enum MasterKeyStatus {
     ACTIVE(true),
-    INACTIVE(false),
-    REVOKED(false);
-
+    ROTATING(false),
+    INACTIVE(false);
 
     private final boolean usable;
 

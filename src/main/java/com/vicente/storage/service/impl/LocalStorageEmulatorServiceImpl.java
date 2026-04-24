@@ -5,19 +5,20 @@ import com.vicente.storage.domain.vo.PhysicalFileNames;
 import com.vicente.storage.dto.UploadMetadataDTO;
 import com.vicente.storage.exception.*;
 import com.vicente.storage.repository.StoredFileMetadataRepository;
+import com.vicente.storage.security.crypto.CryptoConstants;
 import com.vicente.storage.support.cleanup.FileCleanupHandler;
 import com.vicente.storage.support.retry.StorageRetryExecutor;
 import com.vicente.storage.service.LocalStorageEmulatorService;
 import com.vicente.storage.util.FileSuffixes;
-import com.vicente.storage.util.PathValidator;
+import com.vicente.storage.util.StoragePathResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StreamUtils;
+import org.springframework.util.StringUtils;
 
 import java.io.*;
 import java.nio.file.*;
@@ -30,22 +31,20 @@ import java.util.UUID;
 
 @Service
 public class LocalStorageEmulatorServiceImpl implements LocalStorageEmulatorService {
-    private final Path rootPath;
     private final StoredFileMetadataRepository storedFileMetadataRepository;
     private final StorageRetryExecutor storageRetryExecutor;
     private final FileCleanupHandler fileCleanupHandler;
-    private static final String HASH_ALGORITHM = "MD5";
+    private final StoragePathResolver storagePathResolver;
     private static final  Logger logger = LoggerFactory.getLogger(LocalStorageEmulatorServiceImpl.class);
 
-    public LocalStorageEmulatorServiceImpl(
-            @Value("${storage.emulator.root.path}") String rootPath,
-            StoredFileMetadataRepository storedFileMetadataRepository,
-            StorageRetryExecutor storageRetryExecutor, FileCleanupHandler fileCleanupHandler
+    public LocalStorageEmulatorServiceImpl(StoredFileMetadataRepository storedFileMetadataRepository,
+                                           StorageRetryExecutor storageRetryExecutor, FileCleanupHandler fileCleanupHandler,
+                                           StoragePathResolver storagePathResolver
     ) {
-        this.rootPath = Paths.get(rootPath).toAbsolutePath().normalize();
         this.storedFileMetadataRepository = storedFileMetadataRepository;
         this.storageRetryExecutor = storageRetryExecutor;
         this.fileCleanupHandler = fileCleanupHandler;
+        this.storagePathResolver = storagePathResolver;
     }
 
     @Override
@@ -55,16 +54,15 @@ public class LocalStorageEmulatorServiceImpl implements LocalStorageEmulatorServ
 
         String physicalFileName = physicalFileNames.physicalFileName();
         String physicalFileNameTemp = physicalFileNames.physicalFileNameTemp();
+        String bucket = metadata.bucket();
 
-        Path filesPath = resolveChildPath(rootPath, "storage");
-        Path bucketPath = resolveChildPath(filesPath, metadata.bucket());
-        Path physicalPath = bucketPath.resolve(physicalFileName).normalize();
-        Path checksumPath = bucketPath.resolve(physicalFileName + FileSuffixes.CHECKSUM_SUFFIX).normalize();
-        Path physicalPathTemp = bucketPath.resolve(physicalFileNameTemp).normalize();
-        Path checksumTmpPath = bucketPath.resolve(
-                checksumPath.getFileName().toString() + FileSuffixes.TEMP_FILE_SUFFIX).normalize();
+        Path bucketPath =  storagePathResolver.bucketDir(bucket);
+        Path physicalPath = storagePathResolver.physicalFile(bucket, physicalFileName);
+        Path checksumPath = storagePathResolver.checksumFile(bucket, physicalFileName);
+        Path physicalPathTemp = storagePathResolver.physicalFile(bucket, physicalFileNameTemp);
+        Path checksumTmpPath = storagePathResolver.tempFile(bucket, checksumPath.getFileName().toString());
 
-        ensureBucketDirectoryAndValidatePaths(bucketPath, physicalPath, physicalPathTemp, checksumTmpPath, checksumPath);
+        ensureBucketDirectoryExists(bucketPath);
 
         StoredFileMetadata storedFileMetadata = new StoredFileMetadata(metadata.objectKey(), "teste",
                 physicalFileName, ".teste", metadata.contentType(),
@@ -92,7 +90,10 @@ public class LocalStorageEmulatorServiceImpl implements LocalStorageEmulatorServ
 
         storageRetryExecutor.renameRetry(physicalPathTemp, physicalPath, checksumTmpPath, checksumPath);
 
-        scheduleCleanupAfterCommit(oldPhysicalFileName, bucketPath);
+        scheduleCleanupAfterCommit(oldPhysicalFileName, bucket);
+
+        TransactionSynchronizationManager.registerSynchronization(
+                registerNewFileCleanupAfterRollback(physicalPath, checksumPath, physicalPathTemp, checksumTmpPath));
 
         return etag;
     }
@@ -104,10 +105,7 @@ public class LocalStorageEmulatorServiceImpl implements LocalStorageEmulatorServ
         return new PhysicalFileNames(physicalFileName, physicalFileNameTemp);
     }
 
-    private void ensureBucketDirectoryAndValidatePaths(Path bucketPath, Path physicalPath,
-                                                       Path physicalPathTemp, Path checksumTmpPath, Path checksumPath) {
-
-        PathValidator.ensurePathsWithinRoot(bucketPath, physicalPath, physicalPathTemp, checksumTmpPath, checksumPath);
+    private void ensureBucketDirectoryExists(Path bucketPath) {
         try {
             if(Files.notExists(bucketPath)) {
                 logger.info("Creating new bucket directory: {}", bucketPath);
@@ -123,7 +121,7 @@ public class LocalStorageEmulatorServiceImpl implements LocalStorageEmulatorServ
                                               StoredFileMetadata storedFileMetadata, Path physicalPathTemp,
                                               Path checksumTmpPath) {
         try{
-            MessageDigest md = MessageDigest.getInstance(HASH_ALGORITHM);
+            MessageDigest md = MessageDigest.getInstance(CryptoConstants.MD5);
 
             long bytesCount = copyStreamAndCountBytes(fileStream, md, physicalPathTemp);
 
@@ -143,15 +141,15 @@ public class LocalStorageEmulatorServiceImpl implements LocalStorageEmulatorServ
             logger.error("IO error during file processing");
             throw new FileStorageException("Error occurred while reading/writing file stream");
         } catch (NoSuchAlgorithmException e) {
-            logger.error("Failed to initialize {} digest", HASH_ALGORITHM);
-            throw new HashAlgorithmException(HASH_ALGORITHM +" algorithm not available");
+            logger.error("Failed to initialize {} digest", CryptoConstants.MD5);
+            throw new HashAlgorithmException(CryptoConstants.MD5 +" algorithm not available");
         }
 
     }
 
-    private void validateContentLength(UploadMetadataDTO metadata, long bytesCount, Path physicalPathTemp) throws IOException {
+    private void validateContentLength(UploadMetadataDTO metadata, long bytesCount, Path physicalPathTemp) {
         if (metadata.contentLength() > 0 && metadata.contentLength() != bytesCount) {
-            Files.deleteIfExists(physicalPathTemp);
+            fileCleanupHandler.deleteFilesIfExists(physicalPathTemp);
             logger.warn("Uploaded bytes ({}) do not match the expected content length ({}) for file {}",
                     bytesCount, metadata.contentLength(), physicalPathTemp);
             throw new IncompleteUploadException("Upload incomplete: expected " + metadata.contentLength() +
@@ -192,25 +190,23 @@ public class LocalStorageEmulatorServiceImpl implements LocalStorageEmulatorServ
         return etag;
     }
 
-    private void scheduleCleanupAfterCommit(String oldPhysicalFileName, Path bucketPath) {
-        if (oldPhysicalFileName != null && !oldPhysicalFileName.isBlank()){
-            Path oldPhysicalPath = bucketPath.resolve(oldPhysicalFileName).normalize();
-            Path oldChecksumPath = bucketPath.resolve(oldPhysicalFileName + FileSuffixes.CHECKSUM_SUFFIX).normalize();
+    private void scheduleCleanupAfterCommit(String oldPhysicalFileName, String bucket) {
+        if (StringUtils.hasText(oldPhysicalFileName)) {
             try {
-                PathValidator.ensurePathsWithinRoot(bucketPath,oldPhysicalPath, oldChecksumPath);
+                Path oldPhysicalPath = storagePathResolver.physicalFile(bucket, oldPhysicalFileName);
+                Path oldChecksumPath = storagePathResolver.checksumFile(bucket, oldPhysicalFileName);
+                logger.debug("Async cleanup scheduled for files: {}", oldPhysicalFileName);
+                // Registra uma ação para ser executada em sincronia com o ciclo de vida da transação atual.
+                // Esse método "liga" seu código ao commit/rollback da transação do Spring.
+                TransactionSynchronizationManager.registerSynchronization(registerOldFileCleanupAfterCommit(
+                        oldPhysicalFileName, oldPhysicalPath, oldChecksumPath));
             }catch (InvalidStoragePathException e) {
                 logger.warn("Skipping cleanup due to invalid path for file: {}", oldPhysicalFileName, e);
-                return;
             }
-            logger.debug("Async cleanup scheduled for files: {}", oldPhysicalFileName);
-            // Registra uma ação para ser executada em sincronia com o ciclo de vida da transação atual.
-            // Esse método "liga" seu código ao commit/rollback da transação do Spring.
-            TransactionSynchronizationManager.registerSynchronization(transactionSynchronization(
-                    oldPhysicalFileName, oldPhysicalPath, oldChecksumPath));
         }
     }
 
-    private TransactionSynchronization transactionSynchronization(
+    private TransactionSynchronization registerOldFileCleanupAfterCommit(
             String oldPhysicalFileName, Path oldPhysicalPath, Path oldChecksumPath) {
         // Cria uma implementação anônima da interface TransactionSynchronization.
         // Essa interface permite reagir a eventos da transação (beforeCommit, afterCommit, afterRollback, etc).
@@ -233,9 +229,15 @@ public class LocalStorageEmulatorServiceImpl implements LocalStorageEmulatorServ
         };
     }
 
-    private Path resolveChildPath(Path parent, String child) {
-        Path resolved = parent.resolve(child).normalize();
-        PathValidator.ensurePathsWithinRoot(parent, resolved);
-        return resolved;
+    private TransactionSynchronization registerNewFileCleanupAfterRollback(
+            Path physicalPath, Path checksumPath, Path physicalPathTemp, Path checksumTmpPath) {
+        return new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if(status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                    fileCleanupHandler.deleteFilesIfExists( physicalPath, checksumPath, physicalPathTemp, checksumTmpPath);
+                }
+            }
+        };
     }
 }

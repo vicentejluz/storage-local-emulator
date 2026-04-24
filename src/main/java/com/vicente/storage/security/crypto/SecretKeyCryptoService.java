@@ -1,6 +1,7 @@
 package com.vicente.storage.security.crypto;
 
 import com.vicente.storage.exception.SecretKeyCryptoException;
+import com.vicente.storage.security.key.MasterKeyHolder;
 import org.springframework.stereotype.Service;
 import javax.crypto.*;
 import java.security.GeneralSecurityException;
@@ -11,9 +12,6 @@ import java.util.Base64;
 public class SecretKeyCryptoService {
     private final MasterKeyHolder masterKeyHolder;
 
-    // Algoritmo base AES (modo default ECB temporário)
-    public static final String ALGORITHM = "AES";
-
     public SecretKeyCryptoService(MasterKeyHolder masterKeyHolder) {
         this.masterKeyHolder = masterKeyHolder;
     }
@@ -21,7 +19,7 @@ public class SecretKeyCryptoService {
     public String encrypt(final byte[] plainTextBytes) {
         byte[] encryptedBytes = null;
         try {
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            Cipher cipher = Cipher.getInstance(CryptoConstants.AES);
             cipher.init(Cipher.ENCRYPT_MODE, masterKeyHolder.getActiveMasterKey());
             encryptedBytes = cipher.doFinal(plainTextBytes);
             return Base64.getEncoder().encodeToString(encryptedBytes);
@@ -37,7 +35,7 @@ public class SecretKeyCryptoService {
         byte[] decodedBytes = null;
         byte[] decryptedBytes = null;
         try {
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
+            Cipher cipher = Cipher.getInstance(CryptoConstants.AES);
             cipher.init(Cipher.DECRYPT_MODE, masterKey);
             decodedBytes = Base64.getDecoder().decode(encryptedText);
             decryptedBytes = cipher.doFinal(decodedBytes);

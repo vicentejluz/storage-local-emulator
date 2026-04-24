@@ -1,13 +1,15 @@
 package com.vicente.storage.service.impl;
 
 import com.vicente.storage.domain.MasterKey;
+import com.vicente.storage.domain.enums.MasterKeyStatus;
 import com.vicente.storage.exception.MasterKeyStorageException;
 import com.vicente.storage.repository.MasterKeyRepository;
-import com.vicente.storage.security.crypto.MasterKeyHolder;
+import com.vicente.storage.security.crypto.CryptoConstants;
+import com.vicente.storage.security.key.MasterKeyHolder;
+import com.vicente.storage.security.key.MasterKeyLoader;
 import com.vicente.storage.service.MasterKeyService;
 import com.vicente.storage.support.retry.MasterKeyRetry;
-import com.vicente.storage.util.FileSuffixes;
-import com.vicente.storage.util.PathValidator;
+import com.vicente.storage.util.StoragePathResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,12 +19,9 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -33,21 +32,21 @@ import java.util.concurrent.locks.ReentrantLock;
 public class MasterKeyServiceImpl implements MasterKeyService {
     private final MasterKeyRepository masterKeyRepository;
     private final MasterKeyRetry masterKeyRetry;
+    private final StoragePathResolver storagePathResolver;
     private final MasterKeyHolder holder;
+    private final MasterKeyLoader loader;
     private final ReentrantLock lock = new ReentrantLock();
-    private final Path rootPath;
     private final int rotationExpiration;
-    public static final String ALGORITHM = "AES";
-    private static final int KEY_LENGTH = 256;
     private static final Logger logger = LoggerFactory.getLogger(MasterKeyServiceImpl.class);
 
-    public MasterKeyServiceImpl(MasterKeyRepository masterKeyRepository, MasterKeyRetry masterKeyRetry, MasterKeyHolder holder,
-                                @Value("${storage.emulator.root.path}") String rootPath,
+    public MasterKeyServiceImpl(MasterKeyRepository masterKeyRepository, MasterKeyRetry masterKeyRetry,
+                                StoragePathResolver storagePathResolver, MasterKeyHolder holder, MasterKeyLoader loader,
                                 @Value("${storage.emulator.root.master-key.rotation-months:2}") int rotationExpiration) {
         this.masterKeyRepository = masterKeyRepository;
         this.masterKeyRetry = masterKeyRetry;
+        this.storagePathResolver = storagePathResolver;
         this.holder = holder;
-        this.rootPath = Paths.get(rootPath).toAbsolutePath().normalize();
+        this.loader = loader;
         this.rotationExpiration = rotationExpiration;
     }
 
@@ -67,26 +66,7 @@ public class MasterKeyServiceImpl implements MasterKeyService {
 
     @Override
     public void loadMasterKeyIntoMemory(Long version) {
-        if(version == null || version <= 0) {
-            throw new IllegalArgumentException("Invalid master key version");
-        }
-
-        Path masterKeyPath = resolveMasterKeyPath(version);
-        byte[] bytes = null;
-        try {
-            bytes = masterKeyRetry.readAllBytesRetry(masterKeyPath);
-
-            if(bytes.length != (KEY_LENGTH / 8)){
-                throw new MasterKeyStorageException("Invalid master key size: expected " + (KEY_LENGTH / 8) + " bytes");
-            }
-
-            SecretKey masterKey = new SecretKeySpec(bytes, ALGORITHM);
-            holder.load(masterKey, version);
-        } finally {
-            if (bytes != null) {
-                Arrays.fill(bytes, (byte) 0);
-            }
-        }
+        holder.update(loader.load(version), version);
     }
 
     private Long ensureInternal() {
@@ -101,7 +81,11 @@ public class MasterKeyServiceImpl implements MasterKeyService {
         LocalDateTime expirationMasterKey = LocalDateTime.now().minusMonths(rotationExpiration);
         if (masterKey.getCreatedAt().isBefore(expirationMasterKey)) {
             logger.debug("MasterKey expired. Rotating key | current_version={}", masterKey.getVersion());
-            masterKeyRepository.updateStatusForInactive(masterKey);
+            masterKeyRepository.transitionStatus(
+                    masterKey.getVersion(),
+                    masterKey.getStatus(),
+                    MasterKeyStatus.ROTATING
+            );
             return rotateAndStoreMasterKey(masterKey.getVersion());
         }
 
@@ -112,13 +96,13 @@ public class MasterKeyServiceImpl implements MasterKeyService {
 
     private static byte[] generateMasterKey() {
         try {
-            KeyGenerator keyGenerator = KeyGenerator.getInstance(ALGORITHM);
-            keyGenerator.init(KEY_LENGTH);
+            KeyGenerator keyGenerator = KeyGenerator.getInstance(CryptoConstants.AES);
+            keyGenerator.init(CryptoConstants.AES_KEY_LENGTH);
             return keyGenerator.generateKey().getEncoded();
         } catch (NoSuchAlgorithmException e) {
             logger.error("Generate master key failed definitively | algorithm={} | keyLength={} | cause={}",
-                    ALGORITHM, KEY_LENGTH, e.getMessage(), e);
-            throw new MasterKeyStorageException("Failed to generate master key: algorithm " + ALGORITHM + " not available", e);
+                    CryptoConstants.AES, CryptoConstants.AES_KEY_LENGTH, e.getMessage(), e);
+            throw new MasterKeyStorageException("Failed to generate master key: algorithm " + CryptoConstants.AES + " not available", e);
         }
     }
 
@@ -175,7 +159,7 @@ public class MasterKeyServiceImpl implements MasterKeyService {
     }
 
     private Path prepareWritableMasterKeyPath(Long version) {
-        Path masterKeyPath = resolveMasterKeyPath(version);
+        Path masterKeyPath = storagePathResolver.masterKey(version);
         try {
             Files.createDirectories(masterKeyPath.getParent());
             return masterKeyPath;
@@ -183,14 +167,6 @@ public class MasterKeyServiceImpl implements MasterKeyService {
             logger.error("Failed to create MasterKey directory", e);
             throw new MasterKeyStorageException("Could not initialize MasterKey directory", e);
         }
-    }
-
-    private Path resolveMasterKeyPath(Long version){
-        Path keysPath = rootPath.resolve("keys").normalize();
-        Path masterKeyPath = keysPath.resolve("master-key-" + version + FileSuffixes.KEY_SUFFIX).normalize();
-
-        PathValidator.ensurePathsWithinRoot(rootPath, keysPath, masterKeyPath);
-        return masterKeyPath;
     }
 
     private TransactionSynchronization transactionSynchronization(Path masterKeyPath) {

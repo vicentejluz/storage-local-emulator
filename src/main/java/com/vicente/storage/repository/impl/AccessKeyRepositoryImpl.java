@@ -53,15 +53,16 @@ public class AccessKeyRepositoryImpl implements AccessKeyRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AccessKeyDTO> findAllDifferentFromMasterKeyId(Long masterKeyId) {
+    public List<AccessKeyDTO> findAllByMasterKeyIdNot(Long masterKeyId) {
         logger.debug("Fetching AccessKeys with master_key_id different from current active id={}", masterKeyId);
-        List<AccessKeyDTO> keys = jdbcTemplate.query("SELECT ac.access_key, ac.secret_key, mk.version " +
+        List<AccessKeyDTO> keys = jdbcTemplate.query("SELECT ac.access_key, ac.secret_key, mk.version, mk.status " +
                         "FROM " + TABLE_NAME + " AS ac INNER JOIN tb_master_key AS mk ON ac.master_key_id = mk.id " +
                         "WHERE ac.master_key_id <> ? ORDER BY ac.created_at", (rs, _) ->
                 new AccessKeyDTO(
                         rs.getString("access_key"),
                         rs.getString("secret_key"),
-                        rs.getObject("version", Long.class)
+                        rs.getObject("version", Long.class),
+                        rs.getString("status")
                 ), masterKeyId);
 
         logger.debug("Found {} AccessKey(s) requiring rotation for active master_key_id={}", keys.size(), masterKeyId);
