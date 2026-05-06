@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.vicente.storage</groupId>
 	<artifactId>storage-local-emulator</artifactId>
-	<version>0.0.1</version>
+	<version>0.0.4</version>
 	<name>Storage Local Emulator</name>
 	<description>Local object storage emulator with signed URL support, SQLite metadata and Docker volume support.</description>
 	<url>https://github.com/vicentejluz/storage-local-emulator</url>
@@ -47,11 +47,6 @@
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security</artifactId>
-		</dependency>
-
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 
@@ -71,15 +66,9 @@
 		</dependency>
 
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-		</dependency>
-
-		<dependency>
 			<groupId>org.xerial</groupId>
 			<artifactId>sqlite-jdbc</artifactId>
 			<version>3.53.0.0</version>
-			<scope>runtime</scope>
 		</dependency>
 
 		<dependency>

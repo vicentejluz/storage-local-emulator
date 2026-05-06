@@ -13,6 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -63,6 +64,14 @@ public class MasterKeyRepositoryImpl implements MasterKeyRepository {
 
     @Override
     @Transactional(readOnly = true)
+    public List<Long> findRotatingVersions() {
+        logger.debug("Fetching master keys. status={}", MasterKeyStatus.ROTATING.name());
+
+        return jdbcTemplate.queryForList("SELECT version FROM " + TABLE_NAME + " WHERE status = 'ROTATING'", Long.class);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<Long> findIdByActiveVersion(Long version) {
         logger.debug("Fetching id with status=ACTIVE and version={}", version);
         try {
@@ -75,6 +84,24 @@ public class MasterKeyRepositoryImpl implements MasterKeyRepository {
             return Optional.ofNullable(id);
         }catch (EmptyResultDataAccessException e) {
             logger.debug("No MasterKey found with status=ACTIVE and version={}", version);
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> findStatusById(Long id) {
+        logger.debug("Fetching master key status by id={}", id);
+        try {
+            String status = jdbcTemplate.queryForObject(
+                    "SELECT status FROM " + TABLE_NAME + " WHERE id = ? LIMIT 1",
+                    String.class, id);
+
+            logger.debug("Master key status found | id={} | status={}", id, status);
+
+            return Optional.ofNullable(status);
+        }catch (EmptyResultDataAccessException e) {
+            logger.debug("No master key found for id={}", id);
             return Optional.empty();
         }
     }

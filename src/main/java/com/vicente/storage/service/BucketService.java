@@ -1,5 +1,6 @@
 package com.vicente.storage.service;
 
 public interface BucketService {
-    String createBucketIfNotExists(String bucketName, String accessKey);
+    void createBucketIfNotExists(String bucketName, Long accessKeyId);
+    void createBucket(String bucketName, Long accessKeyId);
 }

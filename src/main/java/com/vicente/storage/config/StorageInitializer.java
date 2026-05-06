@@ -30,14 +30,21 @@ public class StorageInitializer implements ApplicationRunner {
 
     @Override
     public void run(@NonNull ApplicationArguments args) {
+        logger.info("Starting storage initialization");
+
+        logger.info("Ensuring active MasterKey");
         long versionMasterKey = masterKeyService.ensureActiveMasterKey();
 
+        logger.info("Loading active MasterKey into memory");
         masterKeyService.loadMasterKeyIntoMemory(versionMasterKey);
 
-        accessKeyService.initializeAndRotateAccessKeys(storageProperties.accessKey(), storageProperties.secretKey(), versionMasterKey);
+        logger.info("Initializing root AccessKey");
+        Long accessKeyId = accessKeyService.initializeRootAccessKey(
+                storageProperties.accessKey(), storageProperties.secretKey(), versionMasterKey);
 
-        if(storageProperties.initialBucket() != null && !storageProperties.initialBucket().isBlank()) {
-            bucketService.createBucketIfNotExists(storageProperties.initialBucket(), storageProperties.accessKey());
+        if(storageProperties.initialBucket() != null) {
+            logger.info("Creating initial bucket");
+            bucketService.createBucketIfNotExists(storageProperties.initialBucket(), accessKeyId);
         }
 
         logger.info("Storage initialization completed");

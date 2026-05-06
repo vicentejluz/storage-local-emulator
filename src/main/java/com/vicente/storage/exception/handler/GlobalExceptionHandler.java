@@ -14,14 +14,12 @@ import java.time.Instant;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
-    public ResponseEntity<StandardError> handleApiException(
-            ApiException e, HttpServletRequest request) {
-
+    public ResponseEntity<StandardError> handleApiException(ApiException e, HttpServletRequest request) {
         StandardError standardError = new StandardError(
                 e.getError(),
                 e.getMessage(),
                 e.getStatus().value(),
-                request.getRequestId(),
+                (String) request.getAttribute("requestId"),
                 Instant.now()
         );
 
@@ -34,7 +32,8 @@ public class GlobalExceptionHandler {
         String message = "Unexpected error occurred. Please contact support.";
 
         StandardError standardError = new StandardError(errorCode.value(),
-                message, errorCode.status().value(), request.getRequestId(), Instant.now());
+                message, errorCode.status().value(), (String) request.getAttribute("requestId"),
+                Instant.now());
         return ResponseEntity.status(errorCode.status()).body(standardError);
     }
 }

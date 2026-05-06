@@ -87,4 +87,8 @@ public class MasterKeyHolder {
         // chave e versão são trocadas em sequência protegida.
         this.activeVersion = version;
     }
+
+    public boolean isLoaded() {
+        return activeMasterKey != null && activeVersion != null;
+    }
 }

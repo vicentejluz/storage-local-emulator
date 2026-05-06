@@ -67,3 +67,28 @@ resilience4j.retry.instances:
     ignore-exceptions:
       - java.nio.file.NoSuchFileException # Caminho inválido
       - java.lang.NullPointerException
+  bucketInitRetry:
+    max-attempts: 3
+    wait-duration: 1s
+    enable-exponential-backoff: true
+    exponential-backoff-multiplier: 2.0
+    exponential-max-wait-duration: 10s
+    retry-exceptions:
+      - java.lang.RuntimeException
+    ignore-exceptions:
+      - java.lang.NullPointerException
+      - org.springframework.dao.DataIntegrityViolationException
+      - org.springframework.jdbc.BadSqlGrammarException
+  bucketSaveRetry:
+    max-attempts: 3
+    wait-duration: 1s
+    enable-exponential-backoff: true
+    exponential-backoff-multiplier: 2.0
+    exponential-max-wait-duration: 10s
+    retry-exceptions:
+      - java.lang.RuntimeException
+    ignore-exceptions:
+      - com.vicente.storage.exception.BucketAlreadyExistsException
+      - java.lang.NullPointerException
+      - org.springframework.dao.DataIntegrityViolationException
+      - org.springframework.jdbc.BadSqlGrammarException

@@ -1,5 +1,9 @@
 package com.vicente.storage.service;
 
+import com.vicente.storage.domain.AccessKey;
+
 public interface AccessKeyService {
-    void initializeAndRotateAccessKeys(String accessKey, String secretKey, Long versionMasterKey);
+    Long initializeRootAccessKey(String accessKey, String secretKey, Long versionMasterKey);
+    AccessKey findByAccessKey(String accessKey);
+    byte[] getDecryptedSecret(String secretKey, Long versionMasterKey);
 }

@@ -6,4 +6,5 @@ public final class CryptoConstants {
     public static final String AES = "AES";
     public static final int AES_KEY_LENGTH = 256;
     public static final String MD5 = "MD5";
+    public static final String HMAC_SHA256 = "HmacSHA256";
 }

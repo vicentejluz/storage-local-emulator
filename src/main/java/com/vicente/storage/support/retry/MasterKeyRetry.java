@@ -9,6 +9,8 @@ import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.nio.file.*;
@@ -23,6 +25,7 @@ public class MasterKeyRetry {
     }
 
     @Retry(name = "saveVersionMasterKeyRetry", fallbackMethod = "handleVersionMasterKeySaveFailure")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long saveVersionMasterKeyRetry() {
         logger.info("Attempting to save master key version");
         return masterKeyRepository.save(new MasterKey());

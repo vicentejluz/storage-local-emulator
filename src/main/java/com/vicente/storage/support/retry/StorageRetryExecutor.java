@@ -9,6 +9,8 @@ import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -26,6 +28,7 @@ public class StorageRetryExecutor {
     }
 
     @Retry(name = "saveMetadataRetry", fallbackMethod = "handleMetadataSaveFailure")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void saveMetadataWithRetry(StoredFileMetadata metadata, Path physicalTmp, Path checksumTmp) {
         logger.info("Attempting to save metadata for objectKey: {} into bucket: {}",
                 metadata.getObjectKey(), metadata.getBucketId());

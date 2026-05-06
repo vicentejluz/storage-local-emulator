@@ -19,6 +19,17 @@ public record StorageProperties(
     String accessKey,
     @NotBlank
     String secretKey,
+    @Pattern(
+            regexp = "^(?!\\d+\\.\\d+\\.\\d+\\.\\d+$)(?!.*\\.\\.)(?!.*\\.-)(?!.*-\\.)[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$",
+            message = "Invalid bucket name format"
+    )
     String initialBucket
 ) {
+    public StorageProperties{
+        initialBucket = normalize(initialBucket);
+    }
+
+    private static String normalize(String value) {
+        return (value == null || value.isBlank()) ? null : value;
+    }
 }

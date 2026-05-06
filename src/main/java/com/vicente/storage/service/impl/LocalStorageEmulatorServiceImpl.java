@@ -6,6 +6,7 @@ import com.vicente.storage.dto.UploadMetadataDTO;
 import com.vicente.storage.exception.*;
 import com.vicente.storage.repository.StoredFileMetadataRepository;
 import com.vicente.storage.security.crypto.CryptoConstants;
+import com.vicente.storage.security.crypto.Encoding;
 import com.vicente.storage.support.cleanup.FileCleanupHandler;
 import com.vicente.storage.support.retry.StorageRetryExecutor;
 import com.vicente.storage.service.LocalStorageEmulatorService;
@@ -25,7 +26,6 @@ import java.nio.file.*;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -129,7 +129,7 @@ public class LocalStorageEmulatorServiceImpl implements LocalStorageEmulatorServ
 
             storedFileMetadata.setContentLength(bytesCount);
 
-            String etag = HexFormat.of().formatHex(md.digest());
+            String etag = Encoding.HEX.encode(md.digest());
             Files.writeString(checksumTmpPath, etag,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 

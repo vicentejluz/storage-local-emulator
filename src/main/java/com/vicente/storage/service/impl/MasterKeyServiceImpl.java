@@ -2,6 +2,8 @@ package com.vicente.storage.service.impl;
 
 import com.vicente.storage.domain.MasterKey;
 import com.vicente.storage.domain.enums.MasterKeyStatus;
+import com.vicente.storage.exception.ActiveMasterKeyNotFoundException;
+import com.vicente.storage.exception.CryptoSystemException;
 import com.vicente.storage.exception.MasterKeyStorageException;
 import com.vicente.storage.repository.MasterKeyRepository;
 import com.vicente.storage.security.crypto.CryptoConstants;
@@ -19,6 +21,7 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -67,6 +70,39 @@ public class MasterKeyServiceImpl implements MasterKeyService {
     @Override
     public void loadMasterKeyIntoMemory(Long version) {
         holder.update(loader.load(version), version);
+
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SecretKey getUsableKey(Long id) {
+        logger.debug("Fetching usable master key | id={}", id);
+
+        String status = masterKeyRepository.findStatusById(id).orElseThrow(() ->
+                new CryptoSystemException("Inconsistent state: master key not found for id=" + id));
+
+        logger.debug("Master key status retrieved | id={} | status={}", id, status);
+
+        if(MasterKeyStatus.INACTIVE.name().equalsIgnoreCase(status)) {
+            logger.warn("Attempt to use INACTIVE master key | id={}", id);
+
+            throw new CryptoSystemException("Master key is inactive and cannot be used. id=" + id);
+        }
+
+        logger.debug("Master key is usable | id={}", id);
+
+        return loader.load(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Long getActiveMasterKeyIdByVersion(Long versionMasterKey) {
+        logger.debug("Fetching active MasterKey | version={}", versionMasterKey);
+
+        return masterKeyRepository.findIdByActiveVersion(versionMasterKey).orElseThrow(() -> {
+            logger.warn("No active MasterKey found | version={}", versionMasterKey);
+            return new ActiveMasterKeyNotFoundException("No active MasterKey found");
+        });
     }
 
     private Long ensureInternal() {
