@@ -2,6 +2,7 @@ package com.vicente.storage.service.impl;
 
 import com.vicente.storage.domain.Bucket;
 import com.vicente.storage.exception.BucketCreationException;
+import com.vicente.storage.exception.BucketNotFoundException;
 import com.vicente.storage.repository.BucketRepository;
 import com.vicente.storage.service.BucketService;
 import com.vicente.storage.support.cleanup.FileCleanupHandler;
@@ -74,6 +75,13 @@ public class BucketServiceImpl implements BucketService {
             logger.error("Failed to create bucket directory | bucketName={} | path={}", bucketName, bucketPath, e);
             throw new BucketCreationException("Failed to create bucket directory for bucket: " + bucketName, e);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Long findIdByNameAndAccessKeyId(String bucketName, long accessKeyId) {
+        return bucketRepository.findIdByNameAndAccessKeyId(bucketName, accessKeyId).orElseThrow(() ->
+                        new BucketNotFoundException("Bucket not found or access denied"));
     }
 
     private void registerBucketRollbackSynchronization(boolean createdNow, Path bucketPath) {

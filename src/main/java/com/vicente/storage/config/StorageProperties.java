@@ -1,5 +1,6 @@
 package com.vicente.storage.config;
 
+import com.vicente.storage.validation.ValidationPatterns;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -13,15 +14,16 @@ public record StorageProperties(
 
     @NotBlank
     @Pattern(
-            regexp = "^[A-Za-z0-9\\-_]{3,64}$",
+            regexp = ValidationPatterns.ACCESS_KEY_REGEX,
             message = "Access key must be alphanumeric (including hyphens and underscores) and between 3 and 64 characters"
     )
     String accessKey,
     @NotBlank
     String secretKey,
     @Pattern(
-            regexp = "^(?!\\d+\\.\\d+\\.\\d+\\.\\d+$)(?!.*\\.\\.)(?!.*\\.-)(?!.*-\\.)[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$",
-            message = "Invalid bucket name format"
+            regexp = ValidationPatterns.BUCKET_NAME_REGEX,
+            message = "Bucket name must be 3-63 characters long, contain only lowercase letters, numbers, and hyphens, " +
+                    "must not start or end with a hyphen, and cannot contain consecutive hyphens."
     )
     String initialBucket
 ) {

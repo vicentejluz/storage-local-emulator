@@ -24,6 +24,8 @@ public class RequestValidator {
     Instant max = now.plus(timestampSkew);
 
         if(timestamp.isBefore(min) || timestamp.isAfter(max)) {
+            logger.warn("Request timestamp outside allowed window. requestTimestamp={}, serverNow={}, minAllowed={}, maxAllowed={}",
+                    timestamp, now, min, max);
             throw new InvalidTimestampException("Request timestamp is outside the allowed window. Please check your system clock.");
         }
     }

@@ -19,13 +19,10 @@ public class StoredFileMetadata extends AuditableEntity {
 
 
     public StoredFileMetadata(String objectKey, String virtualFileName, String physicalFileName,
-                              String extension, String contentType, String contentDisposition,
-                              String virtualPath, Long bucketId) {
+                              String contentDisposition, String virtualPath, Long bucketId) {
         this.objectKey = objectKey;
         this.virtualFileName = virtualFileName;
         this.physicalFileName = physicalFileName;
-        this.extension = extension;
-        this.contentType = contentType;
         this.contentDisposition = contentDisposition;
         this.virtualPath = virtualPath;
         this.bucketId = bucketId;
@@ -34,9 +31,10 @@ public class StoredFileMetadata extends AuditableEntity {
     public StoredFileMetadata(Long id, String objectKey, String virtualFileName, String physicalFileName,
                               String extension, String contentType, String contentDisposition, long contentLength,
                               String virtualPath, Long bucketId, String etag, LocalDateTime createdAt,  LocalDateTime updatedAt) {
-    this(objectKey, virtualFileName, physicalFileName, extension, contentType,
-            contentDisposition, virtualPath, bucketId);
+    this(objectKey, virtualFileName, physicalFileName, contentDisposition, virtualPath, bucketId);
     this.id = id;
+    this.contentType = contentType;
+    this.extension = extension;
     this.contentLength = contentLength;
     this.etag = etag;
     this.createdAt = createdAt;

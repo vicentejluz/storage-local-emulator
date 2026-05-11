@@ -1,4 +1,4 @@
-package com.vicente.storage.util;
+package com.vicente.storage.validation;
 
 import com.vicente.storage.exception.InvalidStoragePathException;
 import org.slf4j.Logger;

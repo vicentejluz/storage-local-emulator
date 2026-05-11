@@ -3,16 +3,16 @@ package com.vicente.storage.repository.impl;
 import com.vicente.storage.domain.Bucket;
 import com.vicente.storage.exception.BucketAlreadyExistsException;
 import com.vicente.storage.exception.BucketPersistenceException;
-import com.vicente.storage.exception.MetadataPersistenceException;
 import com.vicente.storage.repository.BucketRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
 
 @Repository
 public class BucketRepositoryImpl implements BucketRepository {
@@ -77,6 +77,23 @@ public class BucketRepositoryImpl implements BucketRepository {
         logger.debug("Checking existence. bucketName={}, exists={}", bucketName, exists);
 
         return exists;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Long> findIdByNameAndAccessKeyId(String bucketName, long accessKeyId){
+        logger.debug("Searching bucket id by name and accessKeyId. bucketName={}, accessKeyId={}", bucketName, accessKeyId);
+        try {
+            Long id = jdbcTemplate.queryForObject("SELECT id FROM " + TABLE_NAME + " WHERE name=? AND access_key_id=? LIMIT 1",
+                    Long.class, bucketName, accessKeyId);
+
+            logger.debug("Bucket found. bucketName={}, accessKeyId={}, bucketId={}", bucketName, accessKeyId, id);
+
+            return Optional.ofNullable(id);
+        }catch (EmptyResultDataAccessException e) {
+            logger.debug("Bucket not found. bucketName={}, accessKeyId={}", bucketName, accessKeyId);
+            return Optional.empty();
+        }
     }
 
     /**
